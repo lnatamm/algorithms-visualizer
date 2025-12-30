@@ -93,21 +93,36 @@ class SortingVisualizer:
         self.clock = pygame.time.Clock()
         
         # Estados do menu
-        self.state = 'MENU'  # MENU, SIZE_INPUT, ALGORITHM_SELECT, SORTING
+        self.state = 'MENU'  # MENU, CHOOSE_TYPE, SIZE_INPUT/GRAPH_CATEGORY, ALGORITHM_SELECT, SORTING, SEARCHING, GRAPH
         
         # Variáveis de configuração
+        self.algorithm_type = 'sorting'  # 'sorting', 'searching' ou 'graph'
+        self.graph_category = 'global'  # 'global' ou 'local'
         self.array_size = 100
         self.array = []
         self.bar_width = 0
         self.comparing = []
         self.swapping = []
         self.sorted_indices = []
+        self.found_index = -1
+        self.search_target = 0
         self.running = True
+        
+        # Variáveis de grafos
+        self.graph_nodes = []
+        self.graph_edges = []
+        self.node_count = 10
+        self.start_node = 0
+        self.end_node = 0
+        self.visited_nodes = []
+        self.current_node = -1
+        self.distances = {}
+        self.path = []
         self.sound_enabled = True
         self.operation_count = 0
         self.skip_frames = 1
         
-        self.algorithms = {
+        self.sorting_algorithms = {
             'QuickSort': self.quicksort_visual,
             'Merge Sort': self.mergesort_visual,
             'Heap Sort': self.heapsort_visual,
@@ -116,6 +131,27 @@ class SortingVisualizer:
             'Selection Sort': self.selectionsort_visual,
             'Bogo Sort': self.bogosort_visual,
         }
+        
+        self.search_algorithms = {
+            'Busca Linear': self.linear_search_visual,
+            'Busca Binária': self.binary_search_visual,
+            'Busca por Interpolação': self.interpolation_search_visual,
+            'Busca em Saltos': self.jump_search_visual,
+            'Busca Exponencial': self.exponential_search_visual,
+        }
+        
+        self.graph_global_algorithms = {
+            'Dijkstra': self.dijkstra_visual,
+            'Bellman-Ford': self.bellman_ford_visual,
+            'Floyd-Warshall': self.floyd_warshall_visual,
+        }
+        
+        self.graph_local_algorithms = {
+            'BFS (Busca em Largura)': self.bfs_visual,
+            'DFS (Busca em Profundidade)': self.dfs_visual,
+            'A* (A-Star)': self.astar_visual,
+        }
+        
         self.current_algorithm = 'QuickSort'
         
         # Componentes do menu
@@ -127,21 +163,51 @@ class SortingVisualizer:
         self.start_button = Button(WIDTH//2 - 150, HEIGHT//2 - 50, 300, 80, "INICIAR", BLUE, HOVER_BLUE)
         self.quit_button = Button(WIDTH//2 - 150, HEIGHT//2 + 60, 300, 60, "Sair", RED, (255, 100, 100))
         
+        # Escolha de tipo
+        self.sorting_type_button = Button(WIDTH//2 - 360, HEIGHT//2 - 50, 200, 80, "Ordenação", BLUE, HOVER_BLUE)
+        self.searching_type_button = Button(WIDTH//2 - 100, HEIGHT//2 - 50, 200, 80, "Busca", GREEN, (0, 200, 100))
+        self.graph_type_button = Button(WIDTH//2 + 160, HEIGHT//2 - 50, 200, 80, "Grafos", PURPLE, (180, 0, 180))
+        self.type_back_button = Button(WIDTH//2 - 150, HEIGHT//2 + 80, 300, 60, "Voltar", LIGHT_GRAY, (220, 220, 220), BLACK)
+        
+        # Escolha de categoria de grafo
+        self.global_graph_button = Button(WIDTH//2 - 250, HEIGHT//2 - 50, 220, 80, "Global", BLUE, HOVER_BLUE)
+        self.local_graph_button = Button(WIDTH//2 + 30, HEIGHT//2 - 50, 220, 80, "Local", GREEN, (0, 200, 100))
+        self.graph_cat_back_button = Button(WIDTH//2 - 150, HEIGHT//2 + 80, 300, 60, "Voltar", LIGHT_GRAY, (220, 220, 220), BLACK)
+        
         # Input de tamanho
         self.input_box = InputBox(WIDTH//2 - 150, HEIGHT//2 - 40, 300, 80, '100')
         self.confirm_size_button = Button(WIDTH//2 - 150, HEIGHT//2 + 80, 300, 60, "Confirmar", GREEN, (0, 255, 100))
         self.back_button = Button(WIDTH//2 - 150, HEIGHT//2 + 160, 300, 50, "Voltar", LIGHT_GRAY, (220, 220, 220), BLACK)
         
-        # Seleção de algoritmo
+        # Seleção de algoritmo (será recriado dinamicamente)
         self.algo_buttons = []
-        algo_names = list(self.algorithms.keys())
-        start_y = 150
-        for i, name in enumerate(algo_names):
-            button = Button(WIDTH//2 - 200, start_y + i * 68, 400, 58, name, PURPLE, (180, 0, 180))
-            self.algo_buttons.append((name, button))
         
         # Botão voltar para seleção de algoritmo
         self.algo_back_button = Button(WIDTH//2 - 150, HEIGHT - 70, 300, 50, "Voltar", LIGHT_GRAY, (220, 220, 220), BLACK)
+    
+    def create_algorithm_buttons(self):
+        """Cria botões de algoritmo baseado no tipo selecionado"""
+        self.algo_buttons = []
+        
+        if self.algorithm_type == 'sorting':
+            algorithms = self.sorting_algorithms
+            color = PURPLE
+            hover_color = (180, 0, 180)
+        elif self.algorithm_type == 'searching':
+            algorithms = self.search_algorithms
+            color = (0, 150, 150)
+            hover_color = (0, 200, 200)
+        else:  # graph
+            algorithms = self.graph_global_algorithms if self.graph_category == 'global' else self.graph_local_algorithms
+            color = (255, 140, 0)  # Laranja
+            hover_color = (255, 165, 0)
+        
+        algo_names = list(algorithms.keys())
+        start_y = 150
+        
+        for i, name in enumerate(algo_names):
+            button = Button(WIDTH//2 - 200, start_y + i * 68, 400, 58, name, color, hover_color)
+            self.algo_buttons.append((name, button))
     
     def draw_menu(self):
         """Desenha o menu principal"""
@@ -164,6 +230,49 @@ class SortingVisualizer:
         font_small = pygame.font.Font(None, 24)
         footer = font_small.render("Use o mouse para interagir", True, LIGHT_GRAY)
         self.screen.blit(footer, (WIDTH//2 - footer.get_width()//2, HEIGHT - 40))
+        
+        pygame.display.flip()
+    
+    def draw_choose_type(self):
+        """Desenha a tela de escolha entre ordenação, busca e grafos"""
+        self.screen.fill(DARK_GRAY)
+        
+        # Título
+        font_large = pygame.font.Font(None, 70)
+        title = font_large.render("Escolha o Tipo de Algoritmo", True, YELLOW)
+        self.screen.blit(title, (WIDTH//2 - title.get_width()//2, 100))
+        
+        font_medium = pygame.font.Font(None, 32)
+        subtitle = font_medium.render("Clique para selecionar", True, WHITE)
+        self.screen.blit(subtitle, (WIDTH//2 - subtitle.get_width()//2, 180))
+        
+        # Botões
+        self.sorting_type_button.draw(self.screen)
+        self.searching_type_button.draw(self.screen)
+        self.graph_type_button.draw(self.screen)
+        self.type_back_button.draw(self.screen)
+        
+        pygame.display.flip()
+    
+    def draw_graph_category(self):
+        """Desenha a tela de escolha de categoria de grafo"""
+        self.screen.fill(DARK_GRAY)
+        
+        # Título
+        font_large = pygame.font.Font(None, 70)
+        title = font_large.render("Categoria de Busca em Grafos", True, YELLOW)
+        self.screen.blit(title, (WIDTH//2 - title.get_width()//2, 100))
+        
+        font_medium = pygame.font.Font(None, 28)
+        subtitle1 = font_medium.render("Global: Calcula distâncias de todos os nós", True, WHITE)
+        subtitle2 = font_medium.render("Local: Encontra caminho entre dois nós", True, WHITE)
+        self.screen.blit(subtitle1, (WIDTH//2 - subtitle1.get_width()//2, 180))
+        self.screen.blit(subtitle2, (WIDTH//2 - subtitle2.get_width()//2, 215))
+        
+        # Botões
+        self.global_graph_button.draw(self.screen)
+        self.local_graph_button.draw(self.screen)
+        self.graph_cat_back_button.draw(self.screen)
         
         pygame.display.flip()
     
@@ -195,7 +304,8 @@ class SortingVisualizer:
         
         # Título
         font_large = pygame.font.Font(None, 60)
-        title = font_large.render("Escolha o Algoritmo", True, YELLOW)
+        type_name = "Ordenação" if self.algorithm_type == 'sorting' else "Busca"
+        title = font_large.render(f"Escolha o Algoritmo de {type_name}", True, YELLOW)
         self.screen.blit(title, (WIDTH//2 - title.get_width()//2, 50))
         
         font_medium = pygame.font.Font(None, 30)
@@ -217,11 +327,16 @@ class SortingVisualizer:
         
         for i, value in enumerate(self.array):
             x = i * self.bar_width
-            bar_height = (value / self.array_size) * (HEIGHT - 100)
-            y = HEIGHT - bar_height - 50
+            # Ajusta altura para ocupar mais espaço vertical
+            max_height = HEIGHT - 90  # Mais espaço para as barras
+            max_value = max(self.array) if self.array else 1  # Valor máximo no array
+            bar_height = (value / max_value) * max_height
+            y = HEIGHT - bar_height - 10  # Barras mais próximas da base
             
             # Determina a cor da barra
-            if i in self.sorted_indices:
+            if i == self.found_index:
+                color = (255, 215, 0)  # Dourado para elemento encontrado
+            elif i in self.sorted_indices:
                 color = GREEN
             elif i in self.swapping:
                 color = RED
@@ -235,16 +350,19 @@ class SortingVisualizer:
             pygame.draw.rect(self.screen, color, (x, y, rect_width, bar_height))
         
         # Texto de instrução
-        font = pygame.font.Font(None, 36)
-        title_text = font.render("SPACE: Pausar/Continuar | R: Reset | ESC: Menu", True, WHITE)
-        self.screen.blit(title_text, (WIDTH // 2 - title_text.get_width() // 2, 10))
+        font = pygame.font.Font(None, 28)
+        if self.algorithm_type == 'searching':
+            title_text = font.render(f"SPACE: Pausar | R: Reset | ESC: Menu | Alvo: {self.search_target}", True, WHITE)
+        else:
+            title_text = font.render("SPACE: Pausar/Continuar | R: Reset | ESC: Menu", True, WHITE)
+        self.screen.blit(title_text, (WIDTH // 2 - title_text.get_width() // 2, 5))
         
         # Mostrar algoritmo atual
-        font_medium = pygame.font.Font(None, 30)
+        font_medium = pygame.font.Font(None, 26)
         algo_text = font_medium.render(f"Algoritmo: {self.current_algorithm}", True, YELLOW)
-        self.screen.blit(algo_text, (WIDTH // 2 - algo_text.get_width() // 2, 45))
+        self.screen.blit(algo_text, (WIDTH // 2 - algo_text.get_width() // 2, 32))
         
-        font_small = pygame.font.Font(None, 24)
+        font_small = pygame.font.Font(None, 22)
         status = f"Operations: {self.operation_count} | Array Size: {self.array_size}"
         if self.sound_enabled:
             status += " | Sound: ON"
@@ -252,7 +370,7 @@ class SortingVisualizer:
             status += " | Sound: OFF"
         
         status_text = font_small.render(status, True, WHITE)
-        self.screen.blit(status_text, (10, HEIGHT - 30))
+        self.screen.blit(status_text, (10, HEIGHT - 25))
         
         pygame.display.flip()
         
@@ -262,7 +380,8 @@ class SortingVisualizer:
             return
             
         # Mapeia o valor do array para uma frequência audível (200-2000 Hz)
-        freq = int(200 + (frequency / self.array_size) * 1800)
+        max_value = max(self.array) if self.array else 1
+        freq = int(200 + (frequency / max_value) * 1800)
         
         # Gera uma onda sonora curta
         sample_rate = 22050
@@ -684,16 +803,796 @@ class SortingVisualizer:
             
             yield
     
+    def linear_search_visual(self):
+        """Busca Linear com visualização"""
+        for i in range(len(self.array)):
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    return
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        self.running = False
+                        return
+            
+            if not self.running:
+                return
+            
+            self.operation_count += 1
+            self.comparing = [i]
+            
+            # Busca é mais lenta para visualização
+            self.play_sound(self.array[i])
+            self.draw()
+            self.clock.tick(30)  # Mais lento que ordenação
+            
+            if self.array[i] == self.search_target:
+                self.found_index = i
+                self.comparing = []
+                return
+            
+            yield
+        
+        self.comparing = []
+    
+    def binary_search_visual(self):
+        """Busca Binária com visualização (requer array ordenado)"""
+        left = 0
+        right = len(self.array) - 1
+        
+        while left <= right:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    return
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        self.running = False
+                        return
+            
+            if not self.running:
+                return
+            
+            mid = (left + right) // 2
+            self.operation_count += 1
+            self.comparing = [mid]
+            
+            # Busca é mais lenta para visualização
+            self.play_sound(self.array[mid])
+            self.draw()
+            self.clock.tick(10)  # Bem lento para ver a busca binária
+            
+            if self.array[mid] == self.search_target:
+                self.found_index = mid
+                self.comparing = []
+                return
+            elif self.array[mid] < self.search_target:
+                left = mid + 1
+            else:
+                right = mid - 1
+            
+            yield
+        
+        self.comparing = []
+    
+    def interpolation_search_visual(self):
+        """Busca por Interpolação com visualização"""
+        left = 0
+        right = len(self.array) - 1
+        
+        while left <= right and self.search_target >= self.array[left] and self.search_target <= self.array[right]:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    return
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        self.running = False
+                        return
+            
+            if not self.running:
+                return
+            
+            if self.array[right] == self.array[left]:
+                pos = left
+            else:
+                pos = left + int(((self.search_target - self.array[left]) / 
+                                 (self.array[right] - self.array[left])) * (right - left))
+            
+            pos = max(left, min(pos, right))
+            
+            self.operation_count += 1
+            self.comparing = [pos]
+            
+            # Busca é mais lenta para visualização
+            self.play_sound(self.array[pos])
+            self.draw()
+            self.clock.tick(10)
+            
+            if self.array[pos] == self.search_target:
+                self.found_index = pos
+                self.comparing = []
+                return
+            elif self.array[pos] < self.search_target:
+                left = pos + 1
+            else:
+                right = pos - 1
+            
+            yield
+        
+        self.comparing = []
+    
+    def jump_search_visual(self):
+        """Busca em Saltos com visualização"""
+        n = len(self.array)
+        step = int(n ** 0.5)
+        prev = 0
+        
+        while prev < n and self.array[min(step, n) - 1] < self.search_target:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    return
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        self.running = False
+                        return
+            
+            if not self.running:
+                return
+            
+            self.operation_count += 1
+            self.comparing = [min(step, n) - 1]
+            
+            # Busca é mais lenta para visualização
+            self.play_sound(self.array[min(step, n) - 1])
+            self.draw()
+            self.clock.tick(15)
+            
+            prev = step
+            step += int(n ** 0.5)
+            
+            if prev >= n:
+                break
+            
+            yield
+        
+        # Busca linear no bloco
+        while prev < n:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    return
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        self.running = False
+                        return
+            
+            if not self.running:
+                return
+            
+            self.operation_count += 1
+            self.comparing = [prev]
+            
+            # Busca é mais lenta para visualização
+            self.play_sound(self.array[prev])
+            self.draw()
+            self.clock.tick(20)
+            
+            if self.array[prev] == self.search_target:
+                self.found_index = prev
+                self.comparing = []
+                return
+            
+            prev += 1
+            
+            if prev == min(step, n):
+                break
+            
+            yield
+        
+        self.comparing = []
+    
+    def exponential_search_visual(self):
+        """Busca Exponencial com visualização"""
+        if self.array[0] == self.search_target:
+            self.found_index = 0
+            return
+        
+        i = 1
+        while i < len(self.array) and self.array[i] <= self.search_target:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    return
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        self.running = False
+                        return
+            
+            if not self.running:
+                return
+            
+            self.operation_count += 1
+            self.comparing = [i]
+            
+            # Busca é mais lenta para visualização
+            self.play_sound(self.array[i])
+            self.draw()
+            self.clock.tick(15)
+            
+            i = i * 2
+            yield
+        
+        # Busca binária no intervalo
+        left = i // 2
+        right = min(i, len(self.array) - 1)
+        
+        while left <= right:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    return
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        self.running = False
+                        return
+            
+            if not self.running:
+                return
+            
+            mid = (left + right) // 2
+            self.operation_count += 1
+            self.comparing = [mid]
+            
+            # Busca é mais lenta para visualização
+            self.play_sound(self.array[mid])
+            self.draw()
+            self.clock.tick(12)
+            
+            if self.array[mid] == self.search_target:
+                self.found_index = mid
+                self.comparing = []
+                return
+            elif self.array[mid] < self.search_target:
+                left = mid + 1
+            else:
+                right = mid - 1
+            
+            yield
+        
+        self.comparing = []
+    
+    def setup_graph(self):
+        """Configura o grafo com nós e arestas aleatórios"""
+        import math
+        
+        self.graph_nodes = []
+        self.graph_edges = []
+        self.visited_nodes = []
+        self.current_node = -1
+        self.distances = {i: float('inf') for i in range(self.node_count)}
+        self.path = []
+        
+        # Gera posições dos nós em círculo
+        radius = min(WIDTH, HEIGHT) // 3
+        center_x, center_y = WIDTH // 2, HEIGHT // 2 + 20
+        
+        for i in range(self.node_count):
+            angle = 2 * math.pi * i / self.node_count
+            x = center_x + radius * math.cos(angle)
+            y = center_y + radius * math.sin(angle)
+            self.graph_nodes.append((int(x), int(y)))
+        
+        # Gera arestas aleatórias (grafo conectado)
+        # Primeiro garante conectividade
+        for i in range(self.node_count - 1):
+            weight = random.randint(1, 20)
+            self.graph_edges.append((i, i + 1, weight))
+        
+        # Adiciona arestas adicionais
+        extra_edges = random.randint(self.node_count // 2, self.node_count)
+        for _ in range(extra_edges):
+            n1 = random.randint(0, self.node_count - 1)
+            n2 = random.randint(0, self.node_count - 1)
+            if n1 != n2 and not any(e[0] == n1 and e[1] == n2 or e[0] == n2 and e[1] == n1 for e in self.graph_edges):
+                weight = random.randint(1, 20)
+                self.graph_edges.append((n1, n2, weight))
+        
+        # Define nós inicial e final
+        self.start_node = 0
+        self.end_node = self.node_count - 1
+        self.distances[self.start_node] = 0
+        
+        self.operation_count = 0
+    
+    def draw_graph(self):
+        """Desenha o grafo com nós e arestas"""
+        self.screen.fill(BLACK)
+        
+        # Desenha arestas
+        font_small = pygame.font.Font(None, 18)
+        for n1, n2, weight in self.graph_edges:
+            x1, y1 = self.graph_nodes[n1]
+            x2, y2 = self.graph_nodes[n2]
+            
+            # Cor da aresta - verifica ambas direções pois o grafo é não-direcionado
+            is_in_path = False
+            for i in range(len(self.path) - 1):
+                a, b = self.path[i], self.path[i+1]
+                if (n1 == a and n2 == b) or (n1 == b and n2 == a):
+                    is_in_path = True
+                    break
+            
+            if is_in_path:
+                color = GREEN
+                width = 4
+            else:
+                color = (100, 100, 100)
+                width = 2
+            
+            pygame.draw.line(self.screen, color, (x1, y1), (x2, y2), width)
+            
+            # Desenha peso da aresta
+            mid_x, mid_y = (x1 + x2) // 2, (y1 + y2) // 2
+            weight_text = font_small.render(str(weight), True, WHITE)
+            self.screen.blit(weight_text, (mid_x - 10, mid_y - 10))
+        
+        # Desenha nós
+        font_medium = pygame.font.Font(None, 24)
+        for i, (x, y) in enumerate(self.graph_nodes):
+            # Cor do nó
+            if i == self.start_node:
+                color = BLUE
+            elif i == self.end_node:
+                color = RED
+            elif i == self.current_node:
+                color = YELLOW
+            elif i in self.visited_nodes:
+                color = GREEN
+            else:
+                color = WHITE
+            
+            # Desenha círculo do nó
+            pygame.draw.circle(self.screen, color, (x, y), 20)
+            pygame.draw.circle(self.screen, BLACK, (x, y), 18)
+            
+            # Desenha número do nó
+            node_text = font_medium.render(str(i), True, color)
+            text_rect = node_text.get_rect(center=(x, y))
+            self.screen.blit(node_text, text_rect)
+            
+            # Mostra distância se calculada
+            if self.graph_category == 'global' and self.distances.get(i, float('inf')) != float('inf'):
+                dist_text = font_small.render(f"d:{self.distances[i]}", True, YELLOW)
+                self.screen.blit(dist_text, (x - 15, y + 25))
+        
+        # Texto de instrução
+        font = pygame.font.Font(None, 28)
+        title_text = font.render(f"SPACE: Pausar | R: Reset | ESC: Menu", True, WHITE)
+        self.screen.blit(title_text, (WIDTH // 2 - title_text.get_width() // 2, 5))
+        
+        # Mostrar algoritmo atual
+        font_medium = pygame.font.Font(None, 26)
+        algo_text = font_medium.render(f"Algoritmo: {self.current_algorithm}", True, YELLOW)
+        self.screen.blit(algo_text, (WIDTH // 2 - algo_text.get_width() // 2, 32))
+        
+        font_small = pygame.font.Font(None, 22)
+        status = f"Operations: {self.operation_count} | Nodes: {self.node_count}"
+        status_text = font_small.render(status, True, WHITE)
+        self.screen.blit(status_text, (10, HEIGHT - 25))
+        
+        # Info de categoria
+        category_name = "Global" if self.graph_category == 'global' else f"Local ({self.start_node} → {self.end_node})"
+        category_text = font_small.render(category_name, True, LIGHT_GRAY)
+        self.screen.blit(category_text, (WIDTH - category_text.get_width() - 10, HEIGHT - 25))
+        
+        pygame.display.flip()
+    
+    def dijkstra_visual(self):
+        """Algoritmo de Dijkstra com visualização"""
+        import heapq
+        
+        pq = [(0, self.start_node)]
+        visited = set()
+        parent = {i: None for i in range(self.node_count)}  # Para reconstruir caminho
+        
+        while pq and self.running:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    return
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        self.running = False
+                        return
+            
+            if not self.running:
+                return
+            
+            dist, node = heapq.heappop(pq)
+            
+            if node in visited:
+                continue
+            
+            visited.add(node)
+            self.visited_nodes.append(node)
+            self.current_node = node
+            self.operation_count += 1
+            
+            try:
+                self.draw_graph()
+                self.clock.tick(3)
+            except:
+                pass  # Ignora erros de desenho durante execução
+            
+            # Atualiza distâncias dos vizinhos
+            for n1, n2, weight in self.graph_edges:
+                neighbor = None
+                if n1 == node:
+                    neighbor = n2
+                elif n2 == node:
+                    neighbor = n1
+                
+                if neighbor is not None and neighbor not in visited:
+                    new_dist = dist + weight
+                    if new_dist < self.distances[neighbor]:
+                        self.distances[neighbor] = new_dist
+                        parent[neighbor] = node  # Armazena o pai
+                        heapq.heappush(pq, (new_dist, neighbor))
+            
+            yield
+        
+        # Reconstrói o caminho do início ao fim
+        self.path = []
+        current = self.end_node
+        while current is not None:
+            self.path.insert(0, current)
+            current = parent[current]
+        
+        self.current_node = -1
+    
+    def bellman_ford_visual(self):
+        """Algoritmo de Bellman-Ford com visualização"""
+        parent = {i: None for i in range(self.node_count)}  # Para reconstruir caminho
+        
+        # Relaxa todas as arestas V-1 vezes
+        for iteration in range(self.node_count - 1):
+            if not self.running:
+                return
+                
+            for n1, n2, weight in self.graph_edges:
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        self.running = False
+                        return
+                    if event.type == pygame.KEYDOWN:
+                        if event.key == pygame.K_ESCAPE:
+                            self.running = False
+                            return
+                
+                if not self.running:
+                    return
+                
+                # Relaxamento bidirecional
+                if self.distances[n1] + weight < self.distances[n2]:
+                    self.distances[n2] = self.distances[n1] + weight
+                    parent[n2] = n1  # Armazena o pai
+                    self.current_node = n2
+                    if n2 not in self.visited_nodes:
+                        self.visited_nodes.append(n2)
+                    
+                    self.operation_count += 1
+                    try:
+                        self.draw_graph()
+                        self.clock.tick(5)
+                    except:
+                        pass
+                    yield
+                
+                if self.distances[n2] + weight < self.distances[n1]:
+                    self.distances[n1] = self.distances[n2] + weight
+                    parent[n1] = n2  # Armazena o pai
+                    self.current_node = n1
+                    if n1 not in self.visited_nodes:
+                        self.visited_nodes.append(n1)
+                    
+                    self.operation_count += 1
+                    try:
+                        self.draw_graph()
+                        self.clock.tick(5)
+                    except:
+                        pass
+                    yield
+        
+        # Reconstrói o caminho do início ao fim
+        self.path = []
+        current = self.end_node
+        while current is not None:
+            self.path.insert(0, current)
+            current = parent[current]
+        
+        self.current_node = -1
+    
+    def floyd_warshall_visual(self):
+        """Algoritmo de Floyd-Warshall com visualização"""
+        # Inicializa matriz de distâncias
+        dist = [[float('inf')] * self.node_count for _ in range(self.node_count)]
+        next_node = [[None] * self.node_count for _ in range(self.node_count)]  # Para reconstruir caminho
+        
+        for i in range(self.node_count):
+            dist[i][i] = 0
+        
+        for n1, n2, weight in self.graph_edges:
+            dist[n1][n2] = weight
+            dist[n2][n1] = weight
+            next_node[n1][n2] = n2
+            next_node[n2][n1] = n1
+        
+        # Algoritmo principal
+        for k in range(self.node_count):
+            for i in range(self.node_count):
+                for j in range(self.node_count):
+                    for event in pygame.event.get():
+                        if event.type == pygame.QUIT:
+                            self.running = False
+                            return
+                        if event.type == pygame.KEYDOWN:
+                            if event.key == pygame.K_ESCAPE:
+                                self.running = False
+                                return
+                    
+                    if not self.running:
+                        return
+                    
+                    if dist[i][k] + dist[k][j] < dist[i][j]:
+                        dist[i][j] = dist[i][k] + dist[k][j]
+                        next_node[i][j] = next_node[i][k]  # Atualiza próximo nó no caminho
+                        
+                        self.current_node = j
+                        if j not in self.visited_nodes:
+                            self.visited_nodes.append(j)
+                        
+                        self.operation_count += 1
+                        
+                        # Atualiza distâncias a partir do nó inicial
+                        for idx in range(self.node_count):
+                            self.distances[idx] = dist[self.start_node][idx]
+                        
+                        try:
+                            self.draw_graph()
+                            self.clock.tick(8)
+                        except:
+                            pass
+                        yield
+        
+        # Reconstrói o caminho do início ao fim
+        self.path = []
+        if dist[self.start_node][self.end_node] != float('inf'):
+            current = self.start_node
+            self.path.append(current)
+            while current != self.end_node:
+                current = next_node[current][self.end_node]
+                if current is None:
+                    break
+                self.path.append(current)
+        
+        self.current_node = -1
+    
+    def bfs_visual(self):
+        """Busca em Largura (BFS) com visualização"""
+        from collections import deque
+        
+        queue = deque([self.start_node])
+        visited = {self.start_node}
+        parent = {self.start_node: None}
+        
+        while queue:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    return
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        self.running = False
+                        return
+            
+            if not self.running:
+                return
+            
+            node = queue.popleft()
+            self.current_node = node
+            self.visited_nodes.append(node)
+            self.operation_count += 1
+            
+            try:
+                self.draw_graph()
+                self.clock.tick(5)
+            except:
+                pass
+            
+            if node == self.end_node:
+                # Reconstrói caminho
+                self.path = []
+                current = self.end_node
+                while current is not None:
+                    self.path.insert(0, current)
+                    current = parent[current]
+                break
+            
+            # Adiciona vizinhos não visitados
+            for n1, n2, _ in self.graph_edges:
+                neighbor = None
+                if n1 == node and n2 not in visited:
+                    neighbor = n2
+                elif n2 == node and n1 not in visited:
+                    neighbor = n1
+                
+                if neighbor is not None:
+                    visited.add(neighbor)
+                    parent[neighbor] = node
+                    queue.append(neighbor)
+            
+            yield
+        
+        self.current_node = -1
+    
+    def dfs_visual(self):
+        """Busca em Profundidade (DFS) com visualização"""
+        stack = [self.start_node]
+        visited = {self.start_node}
+        parent = {self.start_node: None}
+        
+        while stack:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    return
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        self.running = False
+                        return
+            
+            if not self.running:
+                return
+            
+            node = stack.pop()
+            self.current_node = node
+            self.visited_nodes.append(node)
+            self.operation_count += 1
+            
+            try:
+                self.draw_graph()
+                self.clock.tick(5)
+            except:
+                pass
+            
+            if node == self.end_node:
+                # Reconstrói caminho
+                self.path = []
+                current = self.end_node
+                while current is not None:
+                    self.path.insert(0, current)
+                    current = parent[current]
+                break
+            
+            # Adiciona vizinhos não visitados
+            for n1, n2, _ in self.graph_edges:
+                neighbor = None
+                if n1 == node and n2 not in visited:
+                    neighbor = n2
+                elif n2 == node and n1 not in visited:
+                    neighbor = n1
+                
+                if neighbor is not None:
+                    visited.add(neighbor)
+                    parent[neighbor] = node
+                    stack.append(neighbor)
+            
+            yield
+        
+        self.current_node = -1
+    
+    def astar_visual(self):
+        """A* com visualização (heurística: distância euclidiana)"""
+        import heapq
+        import math
+        
+        def heuristic(n1, n2):
+            x1, y1 = self.graph_nodes[n1]
+            x2, y2 = self.graph_nodes[n2]
+            return math.sqrt((x2 - x1)**2 + (y2 - y1)**2) / 10
+        
+        pq = [(heuristic(self.start_node, self.end_node), 0, self.start_node)]
+        visited = set()
+        parent = {self.start_node: None}
+        g_score = {i: float('inf') for i in range(self.node_count)}
+        g_score[self.start_node] = 0
+        
+        while pq:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    return
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        self.running = False
+                        return
+            
+            if not self.running:
+                return
+            
+            _, g, node = heapq.heappop(pq)
+            
+            if node in visited:
+                continue
+            
+            visited.add(node)
+            self.current_node = node
+            self.visited_nodes.append(node)
+            self.operation_count += 1
+            
+            try:
+                self.draw_graph()
+                self.clock.tick(5)
+            except:
+                pass
+            
+            if node == self.end_node:
+                # Reconstrói caminho
+                self.path = []
+                current = self.end_node
+                while current is not None:
+                    self.path.insert(0, current)
+                    current = parent[current]
+                break
+            
+            # Explora vizinhos
+            for n1, n2, weight in self.graph_edges:
+                neighbor = None
+                if n1 == node:
+                    neighbor = n2
+                elif n2 == node:
+                    neighbor = n1
+                
+                if neighbor is not None and neighbor not in visited:
+                    tentative_g = g + weight
+                    if tentative_g < g_score[neighbor]:
+                        g_score[neighbor] = tentative_g
+                        f_score = tentative_g + heuristic(neighbor, self.end_node)
+                        parent[neighbor] = node
+                        heapq.heappush(pq, (f_score, tentative_g, neighbor))
+            
+            yield
+        
+        self.current_node = -1
+    
     def setup_array(self):
         """Configura o array com o tamanho escolhido"""
-        self.array = list(range(1, self.array_size + 1))
-        random.shuffle(self.array)
+        # Gera valores com mais variação - usa range maior que o tamanho do array
+        max_value = max(100, self.array_size * 2)  # Pelo menos 100, ou 2x o tamanho
+        self.array = random.sample(range(1, max_value + 1), self.array_size)
+        
+        if self.algorithm_type == 'sorting':
+            # Array já está embaralhado pelo random.sample
+            pass
+        elif self.algorithm_type == 'searching':
+            # Para busca, precisa ordenar (exceto busca linear)
+            if self.current_algorithm != 'Busca Linear':
+                self.array.sort()
+            # Busca linear mantém embaralhado
+        
         self.bar_width = max(1, WIDTH // self.array_size)
         self.skip_frames = max(1, self.array_size // 500)
         self.comparing = []
         self.swapping = []
         self.sorted_indices = []
         self.operation_count = 0
+        self.found_index = -1
+        
+        # Define alvo de busca aleatório (um dos valores do array)
+        if self.algorithm_type == 'searching':
+            self.search_target = random.choice(self.array)
     
     def run(self):
         """Loop principal"""
@@ -712,9 +1611,40 @@ class SortingVisualizer:
                 if self.state == 'MENU':
                     if event.type == pygame.MOUSEBUTTONDOWN:
                         if self.start_button.is_clicked(mouse_pos):
-                            self.state = 'SIZE_INPUT'
+                            self.state = 'CHOOSE_TYPE'
                         elif self.quit_button.is_clicked(mouse_pos):
                             self.running = False
+                
+                # Escolha de Tipo
+                elif self.state == 'CHOOSE_TYPE':
+                    if event.type == pygame.MOUSEBUTTONDOWN:
+                        if self.sorting_type_button.is_clicked(mouse_pos):
+                            self.algorithm_type = 'sorting'
+                            self.state = 'SIZE_INPUT'
+                        elif self.searching_type_button.is_clicked(mouse_pos):
+                            self.algorithm_type = 'searching'
+                            self.state = 'SIZE_INPUT'
+                        elif self.graph_type_button.is_clicked(mouse_pos):
+                            self.algorithm_type = 'graph'
+                            self.state = 'GRAPH_CATEGORY'
+                        elif self.type_back_button.is_clicked(mouse_pos):
+                            self.state = 'MENU'
+                
+                # Escolha de Categoria de Grafo
+                elif self.state == 'GRAPH_CATEGORY':
+                    if event.type == pygame.MOUSEBUTTONDOWN:
+                        if self.global_graph_button.is_clicked(mouse_pos):
+                            self.graph_category = 'global'
+                            self.node_count = 10  # Define número padrão de nós
+                            self.create_algorithm_buttons()
+                            self.state = 'ALGORITHM_SELECT'
+                        elif self.local_graph_button.is_clicked(mouse_pos):
+                            self.graph_category = 'local'
+                            self.node_count = 10  # Define número padrão de nós
+                            self.create_algorithm_buttons()
+                            self.state = 'ALGORITHM_SELECT'
+                        elif self.graph_cat_back_button.is_clicked(mouse_pos):
+                            self.state = 'CHOOSE_TYPE'
                 
                 # Input de Tamanho
                 elif self.state == 'SIZE_INPUT':
@@ -723,6 +1653,7 @@ class SortingVisualizer:
                         size = self.input_box.get_value()
                         if 1 <= size <= 10000:
                             self.array_size = size
+                            self.create_algorithm_buttons()
                             self.state = 'ALGORITHM_SELECT'
                     
                     if event.type == pygame.MOUSEBUTTONDOWN:
@@ -730,28 +1661,46 @@ class SortingVisualizer:
                             size = self.input_box.get_value()
                             if 1 <= size <= 10000:
                                 self.array_size = size
+                                self.create_algorithm_buttons()
                                 self.state = 'ALGORITHM_SELECT'
                         elif self.back_button.is_clicked(mouse_pos):
-                            self.state = 'MENU'
+                            self.state = 'CHOOSE_TYPE'
                 
                 # Seleção de Algoritmo
                 elif self.state == 'ALGORITHM_SELECT':
                     if event.type == pygame.MOUSEBUTTONDOWN:
+                        if self.algorithm_type == 'sorting':
+                            algorithms = self.sorting_algorithms
+                        elif self.algorithm_type == 'searching':
+                            algorithms = self.search_algorithms
+                        else:  # graph
+                            algorithms = self.graph_global_algorithms if self.graph_category == 'global' else self.graph_local_algorithms
+                        
                         for name, button in self.algo_buttons:
                             if button.is_clicked(mouse_pos):
                                 self.current_algorithm = name
-                                self.setup_array()
-                                self.state = 'SORTING'
+                                
+                                if self.algorithm_type == 'graph':
+                                    self.running = True  # Garante que running está True
+                                    self.setup_graph()
+                                    self.state = 'GRAPH'
+                                else:
+                                    self.setup_array()
+                                    self.state = 'SORTING' if self.algorithm_type == 'sorting' else 'SEARCHING'
+                                
                                 sorting = True
-                                sort_generator = self.algorithms[name]()
+                                sort_generator = algorithms[name]()
                                 break
                         
                         # Botão voltar
                         if self.algo_back_button.is_clicked(mouse_pos):
-                            self.state = 'SIZE_INPUT'
+                            if self.algorithm_type == 'graph':
+                                self.state = 'GRAPH_CATEGORY'
+                            else:
+                                self.state = 'SIZE_INPUT'
                 
-                # Durante a Ordenação
-                elif self.state == 'SORTING':
+                # Durante a Ordenação/Busca/Grafo
+                elif self.state == 'SORTING' or self.state == 'SEARCHING' or self.state == 'GRAPH':
                     if event.type == pygame.KEYDOWN:
                         if event.key == pygame.K_ESCAPE:
                             self.state = 'MENU'
@@ -760,9 +1709,18 @@ class SortingVisualizer:
                         if event.key == pygame.K_SPACE:
                             paused = not paused
                         if event.key == pygame.K_r:
-                            self.setup_array()
+                            if self.algorithm_type == 'graph':
+                                self.setup_graph()
+                                algorithms = self.graph_global_algorithms if self.graph_category == 'global' else self.graph_local_algorithms
+                            elif self.algorithm_type == 'sorting':
+                                self.setup_array()
+                                algorithms = self.sorting_algorithms
+                            else:
+                                self.setup_array()
+                                algorithms = self.search_algorithms
+                            
                             sorting = True
-                            sort_generator = self.algorithms[self.current_algorithm]()
+                            sort_generator = algorithms[self.current_algorithm]()
                             paused = False
             
             # Atualiza hover dos botões
@@ -770,6 +1728,19 @@ class SortingVisualizer:
                 self.start_button.check_hover(mouse_pos)
                 self.quit_button.check_hover(mouse_pos)
                 self.draw_menu()
+            
+            elif self.state == 'CHOOSE_TYPE':
+                self.sorting_type_button.check_hover(mouse_pos)
+                self.searching_type_button.check_hover(mouse_pos)
+                self.graph_type_button.check_hover(mouse_pos)
+                self.type_back_button.check_hover(mouse_pos)
+                self.draw_choose_type()
+            
+            elif self.state == 'GRAPH_CATEGORY':
+                self.global_graph_button.check_hover(mouse_pos)
+                self.local_graph_button.check_hover(mouse_pos)
+                self.graph_cat_back_button.check_hover(mouse_pos)
+                self.draw_graph_category()
             
             elif self.state == 'SIZE_INPUT':
                 self.confirm_size_button.check_hover(mouse_pos)
@@ -782,26 +1753,30 @@ class SortingVisualizer:
                 self.algo_back_button.check_hover(mouse_pos)
                 self.draw_algorithm_select()
             
-            elif self.state == 'SORTING':
+            elif self.state == 'SORTING' or self.state == 'SEARCHING' or self.state == 'GRAPH':
                 if sorting and sort_generator and not paused:
                     try:
                         next(sort_generator)
                     except StopIteration:
                         sorting = False
-                        # Inicia animação de conclusão
-                        for i in range(len(self.array)):
-                            self.sorted_indices.append(i)
-                            self.play_sound(self.array[i])
-                            self.draw()
-                            self.clock.tick(FPS)
-                            for event in pygame.event.get():
-                                if event.type == pygame.QUIT:
-                                    self.running = False
-                                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                                    self.state = 'MENU'
-                                    break
+                        # Animação de conclusão apenas para ordenação
+                        if self.state == 'SORTING':
+                            for i in range(len(self.array)):
+                                self.sorted_indices.append(i)
+                                self.play_sound(self.array[i])
+                                self.draw()
+                                self.clock.tick(FPS)
+                                for event in pygame.event.get():
+                                    if event.type == pygame.QUIT:
+                                        self.running = False
+                                    if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                                        self.state = 'MENU'
+                                        break
                 
-                self.draw()
+                if self.state == 'GRAPH':
+                    self.draw_graph()
+                else:
+                    self.draw()
             
             self.clock.tick(60)
         
