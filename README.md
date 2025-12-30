@@ -1,4 +1,6 @@
 # 🎯 Visualizador de Algoritmos de Ordenação
+## DISCLAIMER: Utilizado o modelo de I.A Claude Sonnet 4.5 para a geração da interface gráfica
+
 
 Um projeto interativo para visualizar e comparar diferentes algoritmos de ordenação em Python com Pygame.
 
